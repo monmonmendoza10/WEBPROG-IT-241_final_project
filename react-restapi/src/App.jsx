@@ -4,7 +4,6 @@ import { supabase } from './lib/supabaseClient';
 import Chatbot from './components/Chatbot';
 import Toast from './components/Toast';
 import SkillsSection from './components/SkillsSection';
-import Testimonials from './components/Testimonials';
 import NewsletterSignup from './components/NewsletterSignup';
 
 const App = () => {
@@ -233,9 +232,6 @@ const App = () => {
           </div>
         </div>
       </section>
-
-      {/* Testimonials Section */}
-      <Testimonials />
 
       {/* Newsletter Section */}
       <NewsletterSignup />

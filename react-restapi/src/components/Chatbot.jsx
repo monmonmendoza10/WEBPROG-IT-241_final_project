@@ -1,35 +1,59 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: 'Hi! I\'m Vinz\'s Portfolio Assistant. How can I help you today?',
+      text: 'Hi! I\'m Vinz\'s AI Portfolio Assistant. Ask me anything about his skills, projects, or experience!',
       sender: 'bot',
       timestamp: new Date(),
     },
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const chatSessionRef = useRef(null);
 
-  const faqDatabase = {
-    'hello': 'Hi there! Welcome to my portfolio. Feel free to ask me anything!',
-    'hi': 'Hello! How can I assist you?',
-    'who are you': 'I\'m Vinz Szymone Roi V. Mendoza, an Information Technology professional passionate about creating beautiful and functional web applications.',
-    'what do you do': 'I specialize in full-stack web development with React, Python, C++, Java, and Flutter. I also have experience with database design and API development.',
-    'skills': 'My skills include: React, Python, C++, Java, Flutter, Node.js, MySQL, Supabase, Bootstrap, and API development.',
-    'projects': 'I have worked on various projects including e-commerce platforms, task management apps, data analysis tools, and mobile applications.',
-    'contact': 'You can reach me through the contact form below. Fill in your name, email, and message, and I\'ll get back to you soon!',
-    'about': 'I\'m an Information Technology professional with a passion for solving real-world problems through clean, efficient code and excellent user experiences.',
-    'experience': 'I have experience in full-stack development, working with modern frameworks and databases. I\'m constantly learning new technologies!',
-    'education': 'I\'m currently studying Information Technology, focused on web development and software engineering.',
-    'portfolio': 'Check out my portfolio section above! I have projects in Python, C++, Java, and Flutter.',
-    'hire': 'I\'m always open to new opportunities! Feel free to contact me using the contact form on this website.',
-    'thanks': 'You\'re welcome! Is there anything else you\'d like to know?',
-    'help': 'I can answer questions about my skills, projects, experience, contact information, and more. Just ask!',
-    'hobby': 'I love playing basketball and outdoor sports! It\'s a great way to stay active and relax after coding.',
-    'hobbies': 'I love playing basketball and outdoor sports! It\'s a great way to stay active and relax after coding.',
+  const systemPrompt = `You are Vinz Szymone Roi V. Mendoza's Portfolio Assistant. You represent a talented Information Technology professional specializing in full-stack web development.
+
+About Vinz:
+- Skills: React, Python, C++, Java, Flutter, Node.js, MySQL, Supabase, Bootstrap, API Development
+- Projects: E-commerce platforms, task management apps, data analysis tools, mobile applications
+- Experience: Full-stack development with modern frameworks and databases
+- Education: Currently studying Information Technology
+- Hobbies: Basketball, outdoor sports
+- Location: Available for opportunities and collaborations
+
+Guidelines:
+- Be friendly and professional
+- Provide detailed answers about skills and projects
+- Direct questions about hiring to the contact form
+- Keep responses concise but informative
+- If asked something unrelated to the portfolio, politely redirect to portfolio topics`;
+
+  const initializeChat = async () => {
+    try {
+      const apiKey = import.meta.env.VITE_GOOGLE_GEMINI_API_KEY;
+      if (!apiKey) {
+        console.error('Google Gemini API key not found in environment variables');
+        return false;
+      }
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+      chatSessionRef.current = model.startChat({
+        history: [],
+        generationConfig: {
+          maxOutputTokens: 500,
+          temperature: 0.7,
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('Error initializing chat:', error);
+      return false;
+    }
   };
 
   const scrollToBottom = () => {
@@ -40,19 +64,31 @@ const Chatbot = () => {
     scrollToBottom();
   }, [messages]);
 
-  const getBotResponse = (userMessage) => {
-    const lowerMessage = userMessage.toLowerCase().trim();
-    
-    for (const [key, response] of Object.entries(faqDatabase)) {
-      if (lowerMessage.includes(key)) {
-        return response;
+  const sendMessageToAI = async (userMessage) => {
+    try {
+      if (!chatSessionRef.current) {
+        const initialized = await initializeChat();
+        if (!initialized) {
+          return 'Sorry, I couldn\'t connect to the AI service. Please try again later.';
+        }
       }
+
+      const response = await chatSessionRef.current.sendMessage([
+        {
+          role: 'user',
+          parts: [{ text: `${systemPrompt}\n\nUser: ${userMessage}` }],
+        },
+      ]);
+
+      const text = response.response.text();
+      return text || 'I couldn\'t generate a response. Please try again.';
+    } catch (error) {
+      console.error('Error sending message to AI:', error);
+      return 'Sorry, I encountered an error. Please try again later.';
     }
-    
-    return 'I\'m not sure about that. You can ask me about my skills, projects, experience, contact information, or feel free to use the contact form!';
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (inputValue.trim() === '') return;
 
     const userMessage = {
@@ -64,20 +100,25 @@ const Chatbot = () => {
 
     setMessages([...messages, userMessage]);
     setInputValue('');
+    setIsLoading(true);
 
-    setTimeout(() => {
-      const botResponse = {
-        id: messages.length + 2,
-        text: getBotResponse(inputValue),
-        sender: 'bot',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, botResponse]);
-    }, 500);
+    // Get AI response
+    const aiResponse = await sendMessageToAI(inputValue);
+
+    setIsLoading(false);
+
+    const botResponse = {
+      id: messages.length + 2,
+      text: aiResponse,
+      sender: 'bot',
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, botResponse]);
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !isLoading) {
       handleSendMessage();
     }
   };
@@ -117,6 +158,13 @@ const Chatbot = () => {
                 </div>
               </div>
             ))}
+            {isLoading && (
+              <div className="message bot">
+                <div className="message-bubble">
+                  ✓ Typing...
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -128,12 +176,14 @@ const Chatbot = () => {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               className="chatbot-input"
+              disabled={isLoading}
             />
             <button
               onClick={handleSendMessage}
               className="chatbot-send-btn"
+              disabled={isLoading}
             >
-              Send
+              {isLoading ? '...' : 'Send'}
             </button>
           </div>
         </div>
